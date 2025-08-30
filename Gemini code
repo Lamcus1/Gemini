@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50 dark:bg-gray-900">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ChatGemini</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-theme-style">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .chat-bubble {
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .hljs {
+      @apply p-4 rounded-lg bg-gray-800 text-gray-100 text-sm overflow-x-auto;
+    }
+    .message {
+      min-height: 1em;
+    }
+    #sidebar {
+      transition: transform 0.3s ease;
+    }
+    @media (max-width: 768px) {
+      #sidebar {
+        position: fixed;
+        z-index: 50;
+        height: 100%;
+        width: 80%;
+        transform: translateX(-100%);
+      }
+      #sidebar.open {
+        transform: translateX(0);
+      }
+      .overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0,0,0,0.5);
+        z-index: 40;
+      }
+      .overlay.active {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body class="h-full flex">
+
+  <!-- Sidebar Overlay (for mobile) -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 md:w-72 bg-white dark:bg-gray-800 shadow-lg flex flex-col h-full fixed md:relative z-50">
+    <div class="p-4 border-b dark:border-gray-700">
+      <h1 class="text-xl font-bold text-gray-800 dark:text-white">ChatGemini</h1>
+    </div>
+    <div class="flex-1 overflow-y-auto p-2 space-y-2">
+      <button id="new-chat" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+        New Chat
+      </button>
+      <div id="chat-history" class="space-y-1 mt-4">
+        <!-- Chat history items will be injected here -->
+      </div>
+    </div>
+    <div class="p-4 border-t dark:border-gray-700 flex items-center justify-between">
+      <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+        <svg id="light-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <svg id="dark-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+      <span class="text-sm text-gray-500 dark:text-gray-400">Gemini Pro</span>
+    </div>
+  </aside>
+
+  <!-- Main Chat Area -->
+  <main class="flex-1 flex flex-col h-screen bg-gray-50 dark:bg-gray-900 transition">
+    <header class="md:hidden p-3 border-b dark:border-gray-700 flex items-center">
+      <button id="menu-toggle" class="p-2 mr-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-white">ChatGemini</h2>
+    </header>
+
+    <!-- Chat Container -->
+    <div id="chat-container" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      <div id="welcome-screen" class="flex flex-col items-center justify-center h-full text-center px-4">
+        <img src="https://www.gstatic.com/lamda/images/gemini_1507b556e1d7529253235.png" alt="Gemini Logo" class="w-16 h-16 mb-4 opacity-80">
+        <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">ChatGemini</h2>
+        <p class="text-gray-600 dark:text-gray-300 max-w-md mt-2">Ask me anything. Powered by Google's Gemini Pro.</p>
+      </div>
+      <!-- Messages will be inserted here dynamically -->
+    </div>
+
+    <!-- Input Area -->
+    <div class="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
+      <form id="chat-form" class="flex gap-2">
+        <input
+          type="text"
+          id="user-input"
+          placeholder="Message Gemini..."
+          class="flex-1 p-3 rounded-lg border dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          autocomplete="off"
+          required
+        />
+        <button
+          type="submit"
+          class="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </form>
+      <p class="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+        Gemini may produce inaccurate information.
+      </p>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
+// app.js - Main JavaScript logic for ChatGemini
+
+class ChatGemini {
+  constructor() {
+    this.apiKey = ''; // ← Replace with your Gemini API key or use env later
+    this.apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
+    this.conversations = JSON.parse(localStorage.getItem('geminiChats')) || [];
+    this.currentChatId = localStorage.getItem('currentChatId') || null;
+    this.isTyping = false;
+
+    // DOM Elements
+    this.chatContainer = document.getElementById('chat-container');
+    this.userInput = document.getElementById('user-input');
+    this.chatForm = document.getElementById('chat-form');
+    this.chatHistory = document.getElementById('chat-history');
+    this.newChatBtn = document.getElementById('new-chat');
+    this.themeToggle = document.getElementById('theme-toggle');
+    this.menuToggle = document.getElementById('menu-toggle');
+    this.overlay = document.getElementById('overlay');
+    this.sidebar = document.getElementById('sidebar');
+
+    this.init();
+  }
+
+  init() {
+    this.loadTheme();
+    this.renderChatHistory();
+    this.restoreChat();
+
+    this.bindEvents();
+    marked.setOptions({
+      highlight: (code, lang) => {
+        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+        return hljs.highlight(code, { language }).value;
+      },
+      langPrefix: 'hljs language-',
+      pedantic: false,
+      gfm: true,
+      breaks: true,
+    });
+  }
+
+  bindEvents() {
+    this.chatForm.addEventListener('submit', (e) => this.handleSubmit(e));
+    this.userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.chatForm.requestSubmit();
+      }
+    });
+    this.newChatBtn.addEventListener('click', () => this.startNewChat());
+    this.themeToggle.addEventListener('click', () => this.toggleTheme());
+    this.menuToggle.addEventListener('click', () => this.toggleSidebar(true));
+    this.overlay.addEventListener('click', () => this.toggleSidebar(false));
+  }
+
+  async handleSubmit(e) {
+    e.preventDefault();
+    const message = this.userInput.value.trim();
+    if (!message || this.isTyping) return;
+
+    this.userInput.value = '';
+    await this.addUserMessage(message);
+    await this.getGeminiResponse(message);
+  }
+
+  async addUserMessage(message) {
+    this.addMessage('user', message);
+    this.saveMessage('user', message);
+    this.scrollToBottom();
+  }
+
+  async getGeminiResponse(message) {
+    const chatId = this.currentChatId;
+    const messages = this.conversations.find(c => c.id === chatId)?.messages || [];
+    const userMessages = messages.filter(m => m.sender === 'user').map(m => m.text);
+    const botMessages = messages.filter(m => m.sender === 'ai').map(m => m.text);
+
+    // Prepare context (last 5 exchanges)
+    const context = [];
+    const len = Math.min(userMessages.length, botMessages.length);
+    for (let i = Math.max(0, len - 5); i < len; i++) {
+      context.push(`User: ${userMessages[i]}`);
+      context.push(`AI: ${botMessages[i]}`);
+    }
+    context.push(`User: ${message}`);
+    context.push('AI:');
+
+    const prompt = context.join('\n');
+
+    this.isTyping = true;
+    const tempEl = this.addMessage('ai', '', true); // typing bubble
+
+    try {
+      const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('rate_limit');
+        } else {
+          const err = await response.json();
+          throw new Error(err.error?.message || 'API error');
+        }
+      }
+
+      const data = await response.json();
+      const aiText = data.candidates[0]?.content?.parts[0]?.text || "I couldn't generate a response.";
+
+      // Simulate typing
+      this.typeResponse(tempEl, aiText, () => {
+        this.saveMessage('ai', aiText);
+        this.isTyping = false;
+        this.scrollToBottom();
+      });
+
+    } catch (error) {
+      this.isTyping = false;
+      tempEl.remove();
+
+      if (error.message === 'rate_limit') {
+        this.addMessage('system', '⚠️ API quota exceeded. Please try again later.');
+      } else {
+        this.addMessage('system', `❌ Error: ${error.message}`);
+      }
+      this.scrollToBottom();
+    }
+  }
+
+  typeResponse(element, text, onComplete) {
+    const words = text.split('');
+    element.innerHTML = '';
+    let i = 0;
+
+    const timer = setInterval(() => {
+      if (i < words.length) {
+        element.innerHTML += words[i] === '\n' ? '<br>' : words[i];
+        i++;
+        this.scrollToBottom();
+      } else {
+        clearInterval(timer);
+        this.postProcessContent(element);
+        onComplete();
+      }
+    }, 10); // Typing speed
+  }
+
+  postProcessContent(element) {
+    // Convert markdown and syntax highlight
+    const rawHtml = marked.parse(element.innerHTML);
+    element.innerHTML = rawHtml;
+    hljs.highlightAll();
+
+    // Add copy buttons to code blocks
+    element.querySelectorAll('pre').forEach(block => {
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'absolute top-1 right-1 text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded opacity-0 hover:opacity-100 transition-opacity';
+      copyBtn.textContent = 'Copy';
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(block.textContent).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+        });
+      };
+      block.style.position = 'relative';
+      block.appendChild(copyBtn);
+
+      block.addEventListener('mouseenter', () => copyBtn.classList.remove('opacity-0'));
+      block.addEventListener('mouseleave', () => copyBtn.classList.add('opacity-0'));
+    });
+  }
+
+  addMessage(sender, text, isTyping = false) {
+    const bubble = document.createElement('div');
+    bubble.className = `
+      flex ${sender === 'user' ? 'justify-end' : 'justify-start'}
+    `;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `
+      chat-bubble max-w-3xl rounded-2xl px-4 py-3 mb-2 shadow-sm
+      ${sender === 'user'
+        ? 'bg-blue-600 text-white'
+        : sender === 'system'
+          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100'
+      }
+    `;
+
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message whitespace-pre-wrap break-words';
+    messageEl.textContent = text;
+
+    if (isTyping) {
+      const dots = document.createElement('span');
+      dots.className = 'typing-dots ml-2';
+      dots.innerHTML = '&nbsp;.&nbsp;.&nbsp;.';
+      messageEl.appendChild(dots);
+    }
+
+    wrapper.appendChild(messageEl);
+    bubble.appendChild(wrapper);
+    this.chatContainer.appendChild(bubble);
+
+    // Hide welcome screen
+    const welcome = document.getElementById('welcome-screen');
+    if (welcome) welcome.remove();
+
+    return messageEl;
+  }
+
+  saveMessage(sender, text) {
+    if (!this.currentChatId) {
+      this.startNewChat();
+    }
+
+    const chat = this.conversations.find(c => c.id === this.currentChatId);
+    if (chat) {
+      chat.messages.push({ sender, text, timestamp: new Date().toISOString() });
+      this.saveConversations();
+      this.renderChatHistory();
+    }
+  }
+
+  startNewChat() {
+    const id = Date.now().toString();
+    const newChat = {
+      id,
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date().toISOString()
+    };
+    this.conversations.unshift(newChat);
+    this.currentChatId = id;
+    this.saveConversations();
+    this.clearChat();
+    this.renderChatHistory();
+    this.updateChatTitle();
+    localStorage.setItem('currentChatId', id);
+  }
+
+  restoreChat() {
+    if (this.currentChatId) {
+      const chat = this.conversations.find(c => c.id === this.currentChatId);
+      if (chat) {
+        chat.messages.forEach(msg => {
+          this.addMessage(msg.sender, msg.text);
+        });
+        this.updateChatTitle();
+      }
+    }
+  }
+
+  updateChatTitle() {
+    const chat = this.conversations.find(c => c.id === this.currentChatId);
+    if (chat && chat.messages.length > 0) {
+      const firstUserMsg = chat.messages.find(m => m.sender === 'user');
+      if (firstUserMsg) {
+        const title = firstUserMsg.text.length > 30 
+          ? firstUserMsg.text.substring(0, 30) + '...' 
+          : firstUserMsg.text;
+        chat.title = title;
+        this.saveConversations();
+        this.renderChatHistory();
+      }
+    }
+  }
+
+  renderChatHistory() {
+    this.chatHistory.innerHTML = '';
+    this.conversations.forEach(chat => {
+      const item = document.createElement('div');
+      const isActive = chat.id === this.currentChatId;
+
+      item.className = `
+        p-2 rounded-lg cursor-pointer text-sm flex items-center gap-2
+        ${isActive 
+          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+        }
+      `;
+
+      item.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <span class="truncate">${chat.title}</span>
+      `;
+
+      item.addEventListener('click', () => {
+        this.currentChatId = chat.id;
+        localStorage.setItem('currentChatId', chat.id);
+        this.clearChat();
+        this.restoreChat();
+        this.toggleSidebar(false);
+      });
+
+      this.chatHistory.appendChild(item);
+    });
+  }
+
+  clearChat() {
+    const messages = this.chatContainer.querySelectorAll(':scope > div');
+    messages.forEach(el => {
+      if (!el.id || el.id !== 'welcome-screen') el.remove();
+    });
+  }
+
+  saveConversations() {
+    localStorage.setItem('geminiChats', JSON.stringify(this.conversations));
+  }
+
+  toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.classList.contains('dark');
+
+    if (isDark) {
+      html.classList.remove('dark');
+      localStorage.theme = 'light';
+      document.getElementById('light-icon').classList.add('hidden');
+      document.getElementById('dark-icon').classList.remove('hidden');
+    } else {
+      html.classList.add('dark');
+      localStorage.theme = 'dark';
+      document.getElementById('light-icon').classList.remove('hidden');
+      document.getElementById('dark-icon').classList.add('hidden');
+    }
+
+    // Update highlight.js theme
+    const style = document.getElementById('hljs-theme-style');
+    style.setAttribute('href', isDark 
+      ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css'
+      : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css'
+    );
+  }
+
+  loadTheme() {
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+      document.getElementById('dark-icon').classList.add('hidden');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.getElementById('light-icon').classList.add('hidden');
+    }
+  }
+
+  toggleSidebar(open) {
+    if (open) {
+      this.sidebar.classList.add('open');
+      this.overlay.classList.add('active');
+    } else {
+      this.sidebar.classList.remove('open');
+      this.overlay.classList.remove('active');
+    }
+  }
+
+  scrollToBottom() {
+    this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+  }
+}
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  new ChatGemini();
+});
